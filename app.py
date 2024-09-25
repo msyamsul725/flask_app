@@ -7,13 +7,15 @@ from scipy.spatial import ConvexHull
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 import os
+import tempfile
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 load_dotenv()
 
-app.config['DEBUG'] = os.environ.get('FLASK_DEBUG')
+# Enable debug mode based on environment variable
+app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', False)
 
 # Path to the shape predictor model
 shape_predictor_path = './shape_predictor_68_face_landmarks.dat'
@@ -29,7 +31,7 @@ def crop_and_resize_face(image, face, size=(200, 200)):
     """Crops the face from the image and resizes it to a fixed size."""
     (x, y, w, h) = (face.left(), face.top(), face.width(), face.height())
     face_image = image[y:y+h, x:x+w]
-    return cv2.resize(face_image, size)  # Resize to fixed size
+    return cv2.resize(face_image, size)
 
 def detect_landmarks(image):
     """Detects facial landmarks using dlib shape predictor."""
@@ -48,7 +50,7 @@ def detect_landmarks(image):
     
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     landmarks = predictor(gray, dlib.rectangle(0, 0, image.shape[1], image.shape[0]))
-    return landmarks, image
+    return landmarks
 
 def calculate_circularity(landmarks):
     """Calculates the circularity of the face based on landmarks using convex hull."""
@@ -84,44 +86,46 @@ def recognize_face():
     known_image = base64.b64decode(known_image_data)
     unknown_image = base64.b64decode(unknown_image_data)
 
-    # Simpan gambar yang terdecode ke file sementara
-    with open('known.jpg', 'wb') as f:
-        f.write(known_image)
-    with open('unknown.jpg', 'wb') as f:
-        f.write(unknown_image)
+    # Gunakan file sementara untuk menyimpan gambar
+    with tempfile.NamedTemporaryFile(suffix='.jpg') as known_temp_file, tempfile.NamedTemporaryFile(suffix='.jpg') as unknown_temp_file:
+        known_temp_file.write(known_image)
+        unknown_temp_file.write(unknown_image)
+        known_temp_file.flush()
+        unknown_temp_file.flush()
 
-    try:
-        # Load dan proses gambar
-        known_image_loaded = cv2.imread('known.jpg')
-        unknown_image_loaded = cv2.imread('unknown.jpg')
+        try:
+            # Load dan proses gambar
+            known_image_loaded = cv2.imread(known_temp_file.name)
+            unknown_image_loaded = cv2.imread(unknown_temp_file.name)
 
-        # Deteksi landmark dan circularity
-        known_landmarks, _ = detect_landmarks(known_image_loaded)
-        unknown_landmarks, _ = detect_landmarks(unknown_image_loaded)
+            # Deteksi landmark dan circularity
+            known_landmarks = detect_landmarks(known_image_loaded)
+            unknown_landmarks = detect_landmarks(unknown_image_loaded)
 
-        known_circularity = calculate_circularity(known_landmarks)
-        unknown_circularity = calculate_circularity(unknown_landmarks)
+            known_circularity = calculate_circularity(known_landmarks)
+            unknown_circularity = calculate_circularity(unknown_landmarks)
 
-        # Validasi circularity
-        is_valid, circularity_difference = validate_circularity(known_circularity, unknown_circularity)
+            # Validasi circularity
+            is_valid, circularity_difference = validate_circularity(known_circularity, unknown_circularity)
 
-        if not is_valid:
-            return jsonify({
-                'message': 'Face match: false',
-                'circularity_difference': circularity_difference
-            }), 200
+            if not is_valid:
+                return jsonify({
+                    'message': 'Face match: false',
+                    'circularity_difference': circularity_difference
+                }), 200
 
-        # Encode wajah untuk perbandingan
-        known_encoding = load_image_and_encode('known.jpg')
-        unknown_encoding = load_image_and_encode('unknown.jpg')
+            # Encode wajah untuk perbandingan
+            known_encoding = load_image_and_encode(known_temp_file.name)
+            unknown_encoding = load_image_and_encode(unknown_temp_file.name)
 
-        # Bandingkan wajah
-        results = face_recognition.compare_faces([known_encoding], unknown_encoding)
+            # Bandingkan wajah
+            results = face_recognition.compare_faces([known_encoding], unknown_encoding)
 
-        return jsonify({'message': 'Face match: true' if results[0] else 'Face match: false'}), 200
+            return jsonify({'message': 'Face match: true' if results[0] else 'Face match: false'}), 200
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run()
+    # Gunakan variabel PORT dari environment, default ke 8000
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
