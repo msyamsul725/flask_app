@@ -5,8 +5,15 @@ import cv2
 import numpy as np
 from scipy.spatial import ConvexHull
 from flask import Flask, request, jsonify
+from dotenv import load_dotenv
+import os
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
+load_dotenv()
+
+app.config['DEBUG'] = os.environ.get('FLASK_DEBUG')
 
 # Path to the shape predictor model
 shape_predictor_path = './shape_predictor_68_face_landmarks.dat'
@@ -117,4 +124,4 @@ def recognize_face():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
