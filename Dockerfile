@@ -1,9 +1,6 @@
-FROM python:3.9.17-bookworm
+FROM python:3.10-slim
 
-# Allow statements and log messages to immediately appear in the logs
-ENV PYTHONUNBUFFERED True
-ENV APP_HOME /back-end
-WORKDIR $APP_HOME
+WORKDIR /usr/src/app
 
 # Copy local code to the container image
 COPY . ./
@@ -16,7 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose the port
-ENV PORT 8000
+EXPOSE 5000
 
 # Start the Gunicorn server with the appropriate binding to $PORT
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app:app
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app"]
