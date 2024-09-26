@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose the port
-EXPOSE 22
+EXPOSE 5000
 
 # Start the Gunicorn server with the appropriate binding to $PORT
-CMD ["gunicorn", "--bind", "0.0.0.0:22", "run:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app"]
