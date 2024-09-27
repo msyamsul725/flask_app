@@ -72,58 +72,49 @@ def validate_circularity(known_circularity, unknown_circularity):
 @app.route('/recognize', methods=['POST'])
 def recognize_face():
     data = request.json
-    known_image_data = data['photo_attendance']
-    unknown_image_data = data['photo_testing']
-    
+    registered_photo_data = data['registered_photo']  # Foto terdaftar
+    check_in_photo_data = data['photo_check_in']  # Foto absensi/check-in
+
     # Decode base64 menjadi gambar
-    known_image = base64.b64decode(known_image_data)
-    unknown_image = base64.b64decode(unknown_image_data)
-    
-    # Simpan gambar yang terdecode ke file sementara
-    with open('known.jpg', 'wb') as f:
-        f.write(known_image)
-    with open('unknown.jpg', 'wb') as f:
-        f.write(unknown_image)
-        
+    registered_photo = base64.b64decode(registered_photo_data)
+    check_in_photo = base64.b64decode(check_in_photo_data)
+
+    # Simpan gambar yang terdecode ke file sementara dalam format BMP
+    with open('registered.bmp', 'wb') as f:
+        f.write(registered_photo)
+    with open('check_in.bmp', 'wb') as f:
+        f.write(check_in_photo)
+
     try:
-        # Load dan proses gambar
-        known_image_loaded = cv2.imread('known.jpg')
-        unknown_image_loaded = cv2.imread('unknown.jpg')
-        
-        # Deteksi landmark dan circularity
-        known_landmarks, _ = detect_landmarks(known_image_loaded)
-        unknown_landmarks, _ = detect_landmarks(unknown_image_loaded)
-        
-        known_circularity = calculate_circularity(known_landmarks)
-        unknown_circularity = calculate_circularity(unknown_landmarks)
-        
+        # Proses foto dan lakukan pencocokan
+        registered_image_loaded = cv2.imread('registered.bmp')  # Memuat gambar BMP
+        check_in_image_loaded = cv2.imread('check_in.bmp')  # Memuat gambar BMP
+
+        # Lanjutkan dengan deteksi landmark dan circularity seperti semula
+        registered_landmarks, _ = detect_landmarks(registered_image_loaded)
+        check_in_landmarks, _ = detect_landmarks(check_in_image_loaded)
+
+        registered_circularity = calculate_circularity(registered_landmarks)
+        check_in_circularity = calculate_circularity(check_in_landmarks)
+
         # Validasi circularity
-        is_valid, circularity_difference = validate_circularity(known_circularity, unknown_circularity)
+        is_valid, circularity_difference = validate_circularity(registered_circularity, check_in_circularity)
         if not is_valid:
             return jsonify({
                 'valid': False,
                 'circularity_difference': circularity_difference
             }), 200
-        
-        # Encode wajah untuk perbandingan
-        known_encoding = load_image_and_encode('known.jpg')
-        unknown_encoding = load_image_and_encode('unknown.jpg')
-        
-        # Bandingkan wajah
-        results = face_recognition.compare_faces([known_encoding], unknown_encoding)
-        
-        # Periksa hasil perbandingan wajah
-        if results[0]:
-            return jsonify({
-                'valid': True,
-                'message': 'Face match: true'
-            }), 200
-        else:
-            return jsonify({
-                'valid': False,
-                'message': 'Face match: false'
-            }), 200
-        
+
+        # Bandingkan encoding wajah
+        registered_encoding = load_image_and_encode('registered.bmp')  # Ganti menjadi BMP
+        check_in_encoding = load_image_and_encode('check_in.bmp')  # Ganti menjadi BMP
+
+        results = face_recognition.compare_faces([registered_encoding], check_in_encoding)
+
+        return jsonify({
+            'valid': results[0],
+            'message': 'Face match: true' if results[0] else 'Face match: false'
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
