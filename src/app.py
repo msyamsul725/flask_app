@@ -74,35 +74,56 @@ def recognize_face():
     data = request.json
     known_image_data = data['photo_attendance']
     unknown_image_data = data['photo_testing']
+    
     # Decode base64 menjadi gambar
     known_image = base64.b64decode(known_image_data)
     unknown_image = base64.b64decode(unknown_image_data)
+    
     # Simpan gambar yang terdecode ke file sementara
     with open('known.jpg', 'wb') as f:
         f.write(known_image)
     with open('unknown.jpg', 'wb') as f:
         f.write(unknown_image)
+        
     try:
         # Load dan proses gambar
         known_image_loaded = cv2.imread('known.jpg')
         unknown_image_loaded = cv2.imread('unknown.jpg')
+        
         # Deteksi landmark dan circularity
         known_landmarks, _ = detect_landmarks(known_image_loaded)
         unknown_landmarks, _ = detect_landmarks(unknown_image_loaded)
+        
         known_circularity = calculate_circularity(known_landmarks)
         unknown_circularity = calculate_circularity(unknown_landmarks)
+        
         # Validasi circularity
         is_valid, circularity_difference = validate_circularity(known_circularity, unknown_circularity)
         if not is_valid:
             return jsonify({
-                'message': 'Face match: false',
+                'valid': False,
                 'circularity_difference': circularity_difference
             }), 200
+        
         # Encode wajah untuk perbandingan
         known_encoding = load_image_and_encode('known.jpg')
         unknown_encoding = load_image_and_encode('unknown.jpg')
+        
         # Bandingkan wajah
         results = face_recognition.compare_faces([known_encoding], unknown_encoding)
-        return jsonify({'message': 'Face match: true' if results[0] else 'Face match: false'}), 200
+        
+        # Periksa hasil perbandingan wajah
+        if results[0]:
+            return jsonify({
+                'valid': True,
+                'message': 'Face match: true'
+            }), 200
+        else:
+            return jsonify({
+                'valid': False,
+                'message': 'Face match: false'
+            }), 200
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
