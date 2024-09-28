@@ -130,11 +130,13 @@ def recognize_face():
         registered_encoding = load_image_and_encode('registered.jpg')
         check_in_encoding = load_image_and_encode('check_in.jpg')
 
+        # Hasil compare_faces dari face_recognition bisa berupa numpy.bool_
         results = face_recognition.compare_faces([registered_encoding], check_in_encoding)
 
+        # Pastikan hasil di-convert ke boolean Python murni
         return jsonify({
-            'valid': results[0],
-            'message': 'Face match: true' if results[0] else 'Face match: false'
+            'valid': bool(results[0]),  # Konversi ke bool Python
+            'message': 'Face match: true' if bool(results[0]) else 'Face match: false'
         }), 200
 
     except KeyError:
