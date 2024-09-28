@@ -101,8 +101,8 @@ def recognize_face():
 
     try:
         # Proses foto dan lakukan pencocokan
-        registered_image_loaded = cv2.imread('registered.bmp')  # Memuat gambar BMP
-        check_in_image_loaded = cv2.imread('check_in.bmp')  # Memuat gambar BMP
+        registered_image_loaded = cv2.imread('registered.jpg')  # Memuat gambar BMP
+        check_in_image_loaded = cv2.imread('check_in.jpg')  # Memuat gambar BMP
 
         # Deteksi kacamata pada gambar check-in
         if detect_glasses(check_in_image_loaded):
@@ -127,8 +127,8 @@ def recognize_face():
             }), 200
 
         # Bandingkan encoding wajah
-        registered_encoding = load_image_and_encode('registered.bmp')  # Ganti menjadi BMP
-        check_in_encoding = load_image_and_encode('check_in.bmp')  # Ganti menjadi BMP
+        registered_encoding = load_image_and_encode('registered.jpg')  # Ganti menjadi BMP
+        check_in_encoding = load_image_and_encode('check_in.jpg')  # Ganti menjadi BMP
 
         results = face_recognition.compare_faces([registered_encoding], check_in_encoding)
 
@@ -155,7 +155,7 @@ def check_eyeglass():
 
     try:
         # Memuat gambar BMP
-        check_image_loaded = cv2.imread('check_in.bmp')  # Memuat gambar BMP
+        check_image_loaded = cv2.imread('check_in.jpg')  # Memuat gambar BMP
 
         # Deteksi kacamata pada gambar
         if detect_glasses(check_image_loaded):
