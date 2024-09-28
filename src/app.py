@@ -86,23 +86,30 @@ def detect_glasses(image):
 @app.route('/recognize', methods=['POST'])
 def recognize_face():
     data = request.json
-    registered_photo_data = data['registered_photo']  # Foto terdaftar
-    check_in_photo_data = data['photo_check_in']  # Foto absensi/check-in
+    registered_photo_data = data.get('registered_photo')  # Foto terdaftar
+    check_in_photo_data = data.get('photo_check_in')  # Foto absensi/check-in
 
-    # Decode base64 menjadi gambar
-    registered_photo = base64.b64decode(registered_photo_data)
-    check_in_photo = base64.b64decode(check_in_photo_data)
-
-    # Simpan gambar yang terdecode ke file sementara dalam format BMP
-    with open('registered.jpg', 'wb') as f:
-        f.write(registered_photo)
-    with open('check_in.jpg', 'wb') as f:
-        f.write(check_in_photo)
+    # Pastikan bahwa kedua foto ada dalam data yang diterima
+    if not registered_photo_data or not check_in_photo_data:
+        return jsonify({
+            'valid': False,
+            'message': 'Foto terdaftar atau check-in tidak ditemukan.'
+        }), 400
 
     try:
+        # Decode base64 menjadi gambar
+        registered_photo = base64.b64decode(registered_photo_data)
+        check_in_photo = base64.b64decode(check_in_photo_data)
+
+        # Simpan gambar yang terdecode ke file sementara
+        with open('registered.jpg', 'wb') as f:
+            f.write(registered_photo)
+        with open('check_in.jpg', 'wb') as f:
+            f.write(check_in_photo)
+
         # Proses foto dan lakukan pencocokan
-        registered_image_loaded = cv2.imread('registered.jpg')  # Memuat gambar BMP
-        check_in_image_loaded = cv2.imread('check_in.jpg')  # Memuat gambar BMP
+        registered_image_loaded = cv2.imread('registered.jpg')
+        check_in_image_loaded = cv2.imread('check_in.jpg')
 
         # Deteksi kacamata pada gambar check-in
         if detect_glasses(check_in_image_loaded):
@@ -111,7 +118,7 @@ def recognize_face():
                 'message': 'Anda memakai kacamata'
             }), 200
 
-        # Lanjutkan dengan deteksi landmark dan circularity seperti semula
+        # Deteksi landmark dan circularity
         registered_landmarks, _ = detect_landmarks(registered_image_loaded)
         check_in_landmarks, _ = detect_landmarks(check_in_image_loaded)
 
@@ -123,39 +130,50 @@ def recognize_face():
         if not is_valid:
             return jsonify({
                 'valid': False,
-                'circularity_difference': circularity_difference
+                'message': f'Perbedaan circularity terlalu besar: {circularity_difference}',
             }), 200
 
         # Bandingkan encoding wajah
-        registered_encoding = load_image_and_encode('registered.jpg')  # Ganti menjadi BMP
-        check_in_encoding = load_image_and_encode('check_in.jpg')  # Ganti menjadi BMP
+        registered_encoding = load_image_and_encode('registered.jpg')
+        check_in_encoding = load_image_and_encode('check_in.jpg')
 
         results = face_recognition.compare_faces([registered_encoding], check_in_encoding)
 
         return jsonify({
-            'valid': results[0],
+            'valid': bool(results[0]),  # Pastikan boolean diubah ke format JSON
             'message': 'Face match: true' if results[0] else 'Face match: false'
         }), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'valid': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
 @app.route('/check-eyeglass', methods=['POST'])
 def check_eyeglass():
     data = request.json
-    photo_data = data['check_eyeglass']  # Foto yang akan diperiksa
+    photo_data = data.get('check_eyeglass')  # Foto yang akan diperiksa
 
-    # Decode base64 menjadi gambar
-    check_photo = base64.b64decode(photo_data)
-
-    # Simpan gambar yang terdecode ke file sementara dalam format BMP
-    with open('check_in.jpg', 'wb') as f:
-        f.write(check_photo)
+    if not photo_data:
+        return jsonify({
+            'valid': False,
+            'message': 'Foto tidak ditemukan.'
+        }), 400
 
     try:
+        # Decode base64 menjadi gambar
+        check_photo = base64.b64decode(photo_data)
+
+        # Simpan gambar yang terdecode ke file sementara dalam format BMP
+        with open('check_in.jpg', 'wb') as f:
+            f.write(check_photo)
+
         # Memuat gambar BMP
-        check_image_loaded = cv2.imread('check_in.jpg')  # Memuat gambar BMP
+        check_image_loaded = cv2.imread('check_in.bmp')  # Memuat gambar BMP
 
         # Deteksi kacamata pada gambar
         if detect_glasses(check_image_loaded):
