@@ -86,30 +86,23 @@ def detect_glasses(image):
 @app.route('/recognize', methods=['POST'])
 def recognize_face():
     data = request.json
-    registered_photo_data = data.get('registered_photo')  # Foto terdaftar
-    check_in_photo_data = data.get('photo_check_in')  # Foto absensi/check-in
-
-    # Pastikan bahwa kedua foto ada dalam data yang diterima
-    if not registered_photo_data or not check_in_photo_data:
-        return jsonify({
-            'valid': False,
-            'message': 'Foto terdaftar atau check-in tidak ditemukan.'
-        }), 400
-
     try:
         # Decode base64 menjadi gambar
+        registered_photo_data = data['registered_photo']  # Foto terdaftar
+        check_in_photo_data = data['photo_check_in']  # Foto absensi/check-in
+
         registered_photo = base64.b64decode(registered_photo_data)
         check_in_photo = base64.b64decode(check_in_photo_data)
 
-        # Simpan gambar yang terdecode ke file sementara
+        # Simpan gambar yang terdecode ke file sementara dalam format JPG
         with open('registered.jpg', 'wb') as f:
             f.write(registered_photo)
         with open('check_in.jpg', 'wb') as f:
             f.write(check_in_photo)
 
         # Proses foto dan lakukan pencocokan
-        registered_image_loaded = cv2.imread('registered.jpg')
-        check_in_image_loaded = cv2.imread('check_in.jpg')
+        registered_image_loaded = cv2.imread('registered.jpg')  # Memuat gambar JPG
+        check_in_image_loaded = cv2.imread('check_in.jpg')  # Memuat gambar JPG
 
         # Deteksi kacamata pada gambar check-in
         if detect_glasses(check_in_image_loaded):
@@ -118,7 +111,7 @@ def recognize_face():
                 'message': 'Anda memakai kacamata'
             }), 200
 
-        # Deteksi landmark dan circularity
+        # Lanjutkan dengan deteksi landmark dan circularity seperti semula
         registered_landmarks, _ = detect_landmarks(registered_image_loaded)
         check_in_landmarks, _ = detect_landmarks(check_in_image_loaded)
 
@@ -130,7 +123,7 @@ def recognize_face():
         if not is_valid:
             return jsonify({
                 'valid': False,
-                'message': f'Perbedaan circularity terlalu besar: {circularity_difference}',
+                'circularity_difference': circularity_difference
             }), 200
 
         # Bandingkan encoding wajah
@@ -140,16 +133,20 @@ def recognize_face():
         results = face_recognition.compare_faces([registered_encoding], check_in_encoding)
 
         return jsonify({
-            'valid': bool(results[0]),  # Pastikan boolean diubah ke format JSON
+            'valid': results[0],
             'message': 'Face match: true' if results[0] else 'Face match: false'
         }), 200
 
+    except KeyError:
+        return jsonify({
+            'valid': False,
+            'message': 'Foto terdaftar atau check-in tidak ditemukan.'
+        }), 400
     except Exception as e:
         return jsonify({
             'valid': False,
-            'message': f'Error: {str(e)}'
+            'message': 'Terjadi kesalahan saat memproses gambar: ' + str(e)
         }), 500
-
 
 if __name__ == '__main__':
     app.run(debug=True)
