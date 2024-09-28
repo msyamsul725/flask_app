@@ -1,23 +1,14 @@
-import base64
-import face_recognition
-import dlib
 import cv2
 import numpy as np
+import face_recognition
+import dlib
 from scipy.spatial import ConvexHull
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+import base64
 
 app = Flask(__name__)
-CORS(app)
 
-# Path to the shape predictor model
-shape_predictor_path = './shape_predictor_68_face_landmarks.dat'
-
-# Path to Haar Cascade for glasses detection
-glasses_cascade_path = cv2.data.haarcascades + './haarcascade_eye_tree_eyeglasses.xml'
-
-# Load the glasses detector
-glasses_cascade = cv2.CascadeClassifier(glasses_cascade_path)
+shape_predictor_path = "./shape_predictor_68_face_landmarks.dat"
 
 def load_image_and_encode(image_data):
     """Loads an image from base64, converts to RGB, and returns face encoding."""
@@ -49,6 +40,11 @@ def detect_landmarks(image):
     
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     landmarks = predictor(gray, dlib.rectangle(0, 0, image.shape[1], image.shape[0]))
+    
+    # Print all detected landmarks
+    landmark_coords = [(landmarks.part(i).x, landmarks.part(i).y) for i in range(68)]
+    print("Detected landmarks:", landmark_coords)
+
     return landmarks, image
 
 def calculate_circularity(landmarks):
@@ -69,86 +65,94 @@ def calculate_circularity(landmarks):
     return circularity
 
 def validate_circularity(known_circularity, unknown_circularity):
-    """Validates that the unknown face circularity does not differ by more than 0.01 from the known face circularity."""
-    max_difference = 0.01
+    """Validates that the unknown face circularity does not differ by more than 0.005 from the known face circularity."""
+    max_difference = 0.03  # Updated max difference
     difference = abs(known_circularity - unknown_circularity)
     
     return difference <= max_difference, difference
 
-def detect_glasses(image):
-    """Detects if glasses are present in the image."""
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    glasses = glasses_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+def check_face_orientation(landmarks):
+    """Check if the face is oriented towards the camera."""
+    nose_tip = landmarks.part(30)  # Tip of the nose
+    left_eye = landmarks.part(36)  # Left eye corner
+    right_eye = landmarks.part(45)  # Right eye corner
     
-    # Return True if glasses are detected
-    return len(glasses) > 0
+    # Calculate distance ratios for orientation
+    eye_line_length = np.linalg.norm([left_eye.x - right_eye.x, left_eye.y - right_eye.y])
+    nose_to_eye_distance = np.linalg.norm([nose_tip.x - left_eye.x, nose_tip.y - left_eye.y])
+
+    # Adjust threshold based on empirical data
+    if nose_to_eye_distance / eye_line_length < 0.65:  # Adjusted threshold
+        return False  # Face is tilted
+    return True  # Face is looking forward
 
 @app.route('/recognize', methods=['POST'])
 def recognize_face():
     data = request.json
-    try:
-        # Decode base64 menjadi gambar
-        registered_photo_data = data['registered_photo']  # Foto terdaftar
-        check_in_photo_data = data['photo_check_in']  # Foto absensi/check-in
+    registered_photo_data = data.get('registered_photo')  # Registered photo
+    check_in_photo_data = data.get('photo_check_in')  # Check-in photo
 
+    # Ensure both photos are present in the received data
+    if not registered_photo_data or not check_in_photo_data:
+        return jsonify({
+            'valid': False,
+            'message': 'Registered photo or check-in photo not found.'
+        }), 400
+
+    try:
+        # Decode base64 to images
         registered_photo = base64.b64decode(registered_photo_data)
         check_in_photo = base64.b64decode(check_in_photo_data)
 
-        # Simpan gambar yang terdecode ke file sementara dalam format JPG
+        # Save decoded images to temporary files
         with open('registered.jpg', 'wb') as f:
             f.write(registered_photo)
         with open('check_in.jpg', 'wb') as f:
             f.write(check_in_photo)
 
-        # Proses foto dan lakukan pencocokan
-        registered_image_loaded = cv2.imread('registered.jpg')  # Memuat gambar JPG
-        check_in_image_loaded = cv2.imread('check_in.jpg')  # Memuat gambar JPG
+        # Load images
+        registered_image_loaded = cv2.imread('registered.jpg')
+        check_in_image_loaded = cv2.imread('check_in.jpg')
 
-        # Deteksi kacamata pada gambar check-in
-        if detect_glasses(check_in_image_loaded):
-            return jsonify({
-                'valid': False,
-                'message': 'Anda memakai kacamata'
-            }), 200
-
-        # Lanjutkan dengan deteksi landmark dan circularity seperti semula
+        # Detect landmarks
         registered_landmarks, _ = detect_landmarks(registered_image_loaded)
         check_in_landmarks, _ = detect_landmarks(check_in_image_loaded)
 
+        # Calculate circularities
         registered_circularity = calculate_circularity(registered_landmarks)
         check_in_circularity = calculate_circularity(check_in_landmarks)
 
-        # Validasi circularity
+        # Validate circularity
         is_valid, circularity_difference = validate_circularity(registered_circularity, check_in_circularity)
         if not is_valid:
             return jsonify({
                 'valid': False,
-                'circularity_difference': circularity_difference
+                'message': f'Circularity difference too large: {circularity_difference}',
             }), 200
 
-        # Bandingkan encoding wajah
+        # Compare face encodings
         registered_encoding = load_image_and_encode('registered.jpg')
         check_in_encoding = load_image_and_encode('check_in.jpg')
 
-        # Hasil compare_faces dari face_recognition bisa berupa numpy.bool_
-        results = face_recognition.compare_faces([registered_encoding], check_in_encoding)
+        # Hitung persentase kecocokan
+        match_distance = face_recognition.face_distance([registered_encoding], check_in_encoding)[0]
+        match_percentage = (1 - match_distance) * 100  # Convert to percentage
 
-        # Pastikan hasil di-convert ke boolean Python murni
+        # Tentukan apakah kecocokan valid berdasarkan threshold 70%
+        valid_match = match_percentage > 70
+
         return jsonify({
-            'valid': bool(results[0]),  # Konversi ke bool Python
-            'message': 'Face match: true' if bool(results[0]) else 'Face match: false'
+            'valid': bool(valid_match),  # Pastikan valid_match adalah boolean
+            'match_percentage': float(match_percentage),  # Konversi ke float untuk serialisasi
+            'message': 'Face match: true' if valid_match else 'Face match: false'
         }), 200
 
-    except KeyError:
-        return jsonify({
-            'valid': False,
-            'message': 'Foto terdaftar atau check-in tidak ditemukan.'
-        }), 400
     except Exception as e:
         return jsonify({
             'valid': False,
-            'message': 'Terjadi kesalahan saat memproses gambar: ' + str(e)
+            'message': f'Error: {str(e)}'
         }), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
