@@ -80,9 +80,9 @@ def recognize_face():
     check_in_photo = base64.b64decode(check_in_photo_data)
 
     # Simpan gambar yang terdecode ke file sementara dalam format BMP
-    with open('registered.bmp', 'wb') as f:
+    with open('registered.jpg', 'wb') as f:
         f.write(registered_photo)
-    with open('check_in.bmp', 'wb') as f:
+    with open('check_in.jpg', 'wb') as f:
         f.write(check_in_photo)
 
     try:
