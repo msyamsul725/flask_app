@@ -141,3 +141,33 @@ def recognize_face():
 
 if __name__ == '__main__':
     app.run(debug=True)
+@app.route('/check-eyeglass', methods=['POST'])
+def check_eyeglass():
+    data = request.json
+    photo_data = data['check_eyeglass']  # Foto yang akan diperiksa
+
+    # Decode base64 menjadi gambar
+    check_photo = base64.b64decode(photo_data)
+
+    # Simpan gambar yang terdecode ke file sementara dalam format BMP
+    with open('check_in.jpg', 'wb') as f:
+        f.write(check_photo)
+
+    try:
+        # Memuat gambar BMP
+        check_image_loaded = cv2.imread('check_in.bmp')  # Memuat gambar BMP
+
+        # Deteksi kacamata pada gambar
+        if detect_glasses(check_image_loaded):
+            return jsonify({
+                'valid': False,
+                'message': 'Anda memakai kacamata'
+            }), 200
+        else:
+            return jsonify({
+                'valid': True,
+                'message': 'Tidak memakai kacamata'
+            }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
