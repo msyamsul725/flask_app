@@ -13,6 +13,12 @@ CORS(app)
 # Path to the shape predictor model
 shape_predictor_path = './shape_predictor_68_face_landmarks.dat'
 
+# Path to Haar Cascade for glasses detection
+glasses_cascade_path = cv2.data.haarcascades + './haarcascade_eye_tree_eyeglasses.xml'
+
+# Load the glasses detector
+glasses_cascade = cv2.CascadeClassifier(glasses_cascade_path)
+
 def load_image_and_encode(image_data):
     """Loads an image from base64, converts to RGB, and returns face encoding."""
     image = face_recognition.load_image_file(image_data)
@@ -69,6 +75,14 @@ def validate_circularity(known_circularity, unknown_circularity):
     
     return difference <= max_difference, difference
 
+def detect_glasses(image):
+    """Detects if glasses are present in the image."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    glasses = glasses_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    
+    # Return True if glasses are detected
+    return len(glasses) > 0
+
 @app.route('/recognize', methods=['POST'])
 def recognize_face():
     data = request.json
@@ -89,6 +103,13 @@ def recognize_face():
         # Proses foto dan lakukan pencocokan
         registered_image_loaded = cv2.imread('registered.bmp')  # Memuat gambar BMP
         check_in_image_loaded = cv2.imread('check_in.bmp')  # Memuat gambar BMP
+
+        # Deteksi kacamata pada gambar check-in
+        if detect_glasses(check_in_image_loaded):
+            return jsonify({
+                'valid': False,
+                'message': 'Anda memakai kacamata'
+            }), 200
 
         # Lanjutkan dengan deteksi landmark dan circularity seperti semula
         registered_landmarks, _ = detect_landmarks(registered_image_loaded)
@@ -118,3 +139,5 @@ def recognize_face():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+if __name__ == '__main__':
+    app.run(debug=True)
