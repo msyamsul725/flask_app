@@ -71,7 +71,7 @@ def recognize_face():
         match_percentage = (1 - match_distance) * 100  # Convert to percentage
 
         # Tentukan apakah kecocokan valid berdasarkan threshold 45%
-        valid_match = match_percentage > 45
+        valid_match = match_percentage > 60
 
         return jsonify({
             'valid': bool(valid_match),  # Pastikan valid_match adalah boolean
